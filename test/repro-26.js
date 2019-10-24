@@ -1,7 +1,7 @@
 // Open Source Initiative OSI - The MIT License (MIT):Licensing
 //
 // The MIT License (MIT)
-// Copyright (c) 2015 François-Xavier Bourlet (bombela+zerorpc@gmail.com)
+// Copyright (c) 2012 DotCloud Inc (opensource@dotcloud.com)
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
 // copy of this software and associated documentation files (the "Software"),
@@ -21,12 +21,34 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-var path = require("path"),
-	temp = require("temp").track();
+/* This test reproduces issue 26 (server is garbage-collected if no client connection
+    happens before some time). This bug was happening with zmq<2.2.0. */
+var zerorpc = require(".."),
+    _ = require("underscore");
 
-var tmpdir = temp.mkdirSync("zerorpc-nodejs");
-var next_id = 0;
+var rpcServer = new zerorpc.Server({
+    helloWorld: function(reply) {
+        reply(null, "received data")
+    }
+});
 
-exports.random_ipc_endpoint = function() {
-	return 'ipc://' + path.join(tmpdir, (next_id++).toString() + '.ipc');
-}
+rpcServer.bind("tcp://0.0.0.0:4247");
+
+var rpcClient = new zerorpc.Client({ timeout: 5 });
+exports.testRepro26 = function(test) {
+  rpcClient.connect("tcp://localhost:4247");
+  var i = 0;
+  var run = function() {
+    rpcClient.invoke("helloWorld", function(error, res) {
+      i++;
+      if (i < 100) {
+        run();  
+      } else {
+        test.equal(Object.keys(rpcServer._socket.channels).length, 0);
+        rpcServer.close();
+        test.done(); 
+      }
+    }); 
+  }
+  run();
+};

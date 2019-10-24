@@ -1,7 +1,7 @@
 // Open Source Initiative OSI - The MIT License (MIT):Licensing
 //
 // The MIT License (MIT)
-// Copyright (c) 2015 François-Xavier Bourlet (bombela+zerorpc@gmail.com)
+// Copyright (c) 2012 DotCloud Inc (opensource@dotcloud.com)
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
 // copy of this software and associated documentation files (the "Software"),
@@ -22,93 +22,87 @@
 // DEALINGS IN THE SOFTWARE.
 
 var zerorpc = require(".."),
-	_ = require("underscore");
-	tutil = require("./lib/testutil");
+    _ = require("underscore");
 
-module.exports = {
-	setUp: function(cb) {
-		var endpoint = tutil.random_ipc_endpoint();
-		this.srv = new zerorpc.Server({
-			addMan: function(sentence, reply) {
-				reply(null, sentence + ", man!", false);
-			},
+var rpcServer = new zerorpc.Server({
+    addMan: function(sentence, reply) {
+        reply(null, sentence + ", man!", false);
+    },
 
-			add42: function(n, reply) {
-				reply(null, n + 42, false);
-			}
-		});
-		this.srv.bind(endpoint);
-		this.cli = new zerorpc.Client({ timeout: 5 });
-		this.cli.connect(endpoint);
-		cb();
-	},
-	tearDown: function(cb) {
-		this.cli.close();
-		this.srv.close();
-		cb();
-	},
-	testNormalStringMethod: function(test) {
-		test.expect(3);
+    add42: function(n, reply) {
+        reply(null, n + 42, false);
+    }
+});
 
-		this.cli.invoke("addMan", "This is not an error",
-				function(error, res, more) {
-					test.ifError(error);
-					test.deepEqual(res, "This is not an error, man!");
-					test.equal(more, false);
-					test.done();
-				});
-	},
-	testNormalIntMethod: function(test) {
-		test.expect(3);
+rpcServer.bind("tcp://0.0.0.0:4245");
 
-		this.cli.invoke("add42", 30, function(error, res, more) {
-			test.ifError(error);
-			test.deepEqual(res, 72);
-			test.equal(more, false);
-			test.done();
-		});
-	},
-	testIntrospector: function(test) {
-		test.expect(8);
+var rpcClient = new zerorpc.Client({ timeout: 5 });
+rpcClient.connect("tcp://localhost:4245");
 
-		this.cli.invoke("_zerorpc_inspect", function(error, res, more) {
-			test.ifError(error);
+exports.testNormalStringMethod = function(test) {
+    test.expect(3);
 
-			test.equal(typeof(res.name), "string");
-			test.equal(_.keys(res.methods).length, 2);
+    rpcClient.invoke("addMan", "This is not an error", function(error, res, more) {
+        test.ifError(error);
+        test.deepEqual(res, "This is not an error, man!");
+        test.equal(more, false);
+        test.done();
+    });
+};
 
-			for(var key in res.methods) {
-				test.equal(res.methods[key].doc, "");
-			}
+exports.testNormalIntMethod = function(test) {
+    test.expect(3);
 
-			test.deepEqual(res.methods.add42.args.length, 1);
-			test.deepEqual(res.methods.add42.args[0].name, "n");
-			test.equal(more, false);
-			test.done();
-		});
-	},
-	testNonExistentMethod: function(test) {
-		test.expect(3);
+    rpcClient.invoke("add42", 30, function(error, res, more) {
+        test.ifError(error);
+        test.deepEqual(res, 72);
+        test.equal(more, false);
+        test.done();
+    });
+};
 
-		this.cli.invoke("non_existent", function(error, res, more) {
-			test.ok(error);
-			test.equal(res, null);
-			test.equal(more, false);
-			test.done();
-		});
-	},
-	testBadClient: function(test) {
-		test.expect(3);
+exports.testIntrospector = function(test) {
+    test.expect(8);
 
-		var badRpcClient = new zerorpc.Client({ timeout: 5 });
-		badRpcClient.connect(tutil.random_ipc_endpoint());
+    rpcClient.invoke("_zerorpc_inspect", function(error, res, more) {
+        test.ifError(error);
 
-		badRpcClient.invoke("add42", 30, function(error, res, more) {
-			test.ok(error);
-			test.equal(res, null);
-			test.equal(more, false);
-			badRpcClient.close();
-			test.done();
-		});
-	}
+        test.equal(typeof(res.name), "string");
+        test.equal(_.keys(res.methods).length, 2);
+
+        for(var key in res.methods) {
+            test.equal(res.methods[key].doc, "");
+        }
+
+        test.deepEqual(res.methods.add42.args.length, 1);
+        test.deepEqual(res.methods.add42.args[0].name, "n");
+        test.equal(more, false);
+        test.done();
+    });
+};
+
+exports.testNonExistentMethod = function(test) {
+    test.expect(3);
+
+    rpcClient.invoke("non_existent", function(error, res, more) {
+        test.ok(error);
+        test.equal(res, null);
+        test.equal(more, false);
+        test.done();
+    });
+};
+
+exports.testBadClient = function(test) {
+    test.expect(3);
+
+    var badRpcClient = new zerorpc.Client();
+    badRpcClient.connect("tcp://localhost:4040");
+
+    badRpcClient.invoke("add42", 30, function(error, res, more) {
+        test.ok(error);
+        test.equal(res, null);
+        test.equal(more, false);
+        rpcServer.close();
+        test.done();
+    });
 };

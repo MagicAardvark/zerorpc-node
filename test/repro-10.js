@@ -1,7 +1,7 @@
 // Open Source Initiative OSI - The MIT License (MIT):Licensing
 //
 // The MIT License (MIT)
-// Copyright (c) 2015 François-Xavier Bourlet (bombela+zerorpc@gmail.com)
+// Copyright (c) 2012 DotCloud Inc (opensource@dotcloud.com)
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
 // copy of this software and associated documentation files (the "Software"),
@@ -24,30 +24,26 @@
 /* This test reproduces issue 10 (server is garbage-collected if no client connection
     happens before some time). This bug was happening with zmq<2.2.0. */
 var zerorpc = require(".."),
-    tutil = require("./lib/testutil");
+    _ = require("underscore");
 
-module.exports = {
-	testRepro10: function(test) {
-		var endpoint = tutil.random_ipc_endpoint();
-		srv = new zerorpc.Server({
-			helloWorld: function(reply) {
-				reply(null, "Hello World!")
-			}
-		});
+var rpcServer = new zerorpc.Server({
+    helloWorld: function(reply) {
+        reply(null, "Hello World!")
+    }
+});
 
-		srv.bind(endpoint);
-		cli = new zerorpc.Client({ timeout: 5 });
+rpcServer.bind("tcp://0.0.0.0:4247");
 
-		setTimeout(function() {
-			cli.connect(endpoint);
-			cli.invoke("helloWorld", function(error, res, more) {
-				test.equal(error, null);
-				test.equal(res, "Hello World!");
-				test.equal(more, false);
-				cli.close();
-				srv.close();
-				test.done();
-			});
-		}, 10000);
-	}
+var rpcClient = new zerorpc.Client({ timeout: 5 });
+exports.testRepro10 = function(test) {
+    setTimeout(function() {
+        rpcClient.connect("tcp://localhost:4247");
+        rpcClient.invoke("helloWorld", function(error, res, more) {
+            test.equal(error, null);
+            test.equal(res, "Hello World!");
+            test.equal(more, false);
+            rpcServer.close();
+            test.done();
+        });
+    }, 10000);
 };

@@ -1,7 +1,7 @@
 // Open Source Initiative OSI - The MIT License (MIT):Licensing
 //
 // The MIT License (MIT)
-// Copyright (c) 2015 François-Xavier Bourlet (bombela+zerorpc@gmail.com)
+// Copyright (c) 2012 DotCloud Inc (opensource@dotcloud.com)
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
 // copy of this software and associated documentation files (the "Software"),
@@ -22,46 +22,39 @@
 // DEALINGS IN THE SOFTWARE.
 
 var zerorpc = require(".."),
-    tutil = require("./lib/testutil");
+    _ = require("underscore");
 
-module.exports = {
-	setUp: function(cb) {
-		var endpoint = tutil.random_ipc_endpoint();
-		this.srv = new zerorpc.Server({
-			iter: function(from, to, step, reply) {
-				for(var i=from; i<to; i+=step) {
-					reply(null, i, true);
-				}
+var rpcServer = new zerorpc.Server({
+    iter: function(from, to, step, reply) {
+        for(var i=from; i<to; i+=step) {
+            reply(null, i, true);
+        }
 
-				reply();
-			}
-		});
-		this.srv.bind(endpoint);
-		this.cli = new zerorpc.Client({ timeout: 5 });
-		this.cli.connect(endpoint);
-		cb();
-	},
-	tearDown: function(cb) {
-		this.cli.close();
-		this.srv.close();
-		cb();
-	},
-	testStreamingMethodWithBufferResets: function(test) {
-		test.expect(3000);
-		var nextExpected = 1;
+        reply();
+    }
+});
 
-		this.cli.invoke("iter", 1, 1000, 1, function(error, res, more) {
-			test.ifError(error);
+rpcServer.bind("tcp://0.0.0.0:4242");
 
-			if(nextExpected == 1000) {
-				test.equal(res, undefined);
-				test.equal(more, false);
-				test.done();
-			} else {
-				test.equal(res, nextExpected);
-				test.equal(more, true);
-				nextExpected += 1;
-			}
-		});
-	}
+var rpcClient = new zerorpc.Client({ timeout: 5 });
+rpcClient.connect("tcp://localhost:4242");
+
+exports.testStreamingMethodWithBufferResets = function(test) {
+    test.expect(3000);
+    var nextExpected = 1;
+
+    rpcClient.invoke("iter", 1, 1000, 1, function(error, res, more) {
+        test.ifError(error);
+
+        if(nextExpected == 1000) {
+            test.equal(res, undefined);
+            test.equal(more, false);
+            rpcServer.close();
+            test.done();
+        } else {
+            test.equal(res, nextExpected);
+            test.equal(more, true);
+            nextExpected += 1;
+        }
+    });
 };

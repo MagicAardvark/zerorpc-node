@@ -1,7 +1,7 @@
 // Open Source Initiative OSI - The MIT License (MIT):Licensing
 //
 // The MIT License (MIT)
-// Copyright (c) 2015 François-Xavier Bourlet (bombela+zerorpc@gmail.com)
+// Copyright (c) 2012 DotCloud Inc (opensource@dotcloud.com)
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
 // copy of this software and associated documentation files (the "Software"),
@@ -22,53 +22,32 @@
 // DEALINGS IN THE SOFTWARE.
 
 var zerorpc = require(".."),
-    tutil = require("./lib/testutil");
+    _ = require("underscore");
 
-module.exports = {
-	setUp: function(cb) {
-		var endpoint = tutil.random_ipc_endpoint();
-		this.srv = new zerorpc.Server({
-			quiet: function(reply) {
-				setTimeout(function() {
-					try {
-						reply(null, "Should not happen", false);
-					} catch (e) { /* expected */ }
-				}, 6 * 1000);
-			}
-		});
-		this.srv.bind(endpoint);
-		this.cli = new zerorpc.Client({ timeout: 5 });
-		this.cli.connect(endpoint);
-		cb();
-	},
-	tearDown: function(cb) {
-		this.cli.close();
-		this.srv.close();
-		cb();
-	},
-	testQuiet: function(test) {
-		test.expect(3);
-
-		this.cli.invoke("quiet", function(error, res, more) {
-			test.equal(error.name, "TimeoutExpired");
-			test.equal(res, null);
-			test.equal(more, false);
-			test.done();
-		});
-	},
-	testOverride: function(test) {
-		var timeout = 1,
-			start;
-		test.expect(4);
-
-		start = Date.now();
-		this.cli.invoke({ timeout: timeout }, "quiet", function(error, res, more) {
-			var end = Date.now();
-			test.ok(end - start - 1000 < 30, "Timeout should be ~1 second");
-			test.equal(error.name, "TimeoutExpired");
-			test.equal(res, null);
-			test.equal(more, false);
-			test.done();
-		});
+var rpcServer = new zerorpc.Server({
+    quiet: function(reply) {
+        setTimeout(function() {
+            try {
+                reply(null, "Should not happen", false);
+            } catch (e) { /* expected */ }
+        }, 6 * 1000);
     }
+});
+
+rpcServer.bind("tcp://0.0.0.0:4248");
+
+var rpcClient = new zerorpc.Client({ timeout: 5 });
+rpcClient.connect("tcp://localhost:4248");
+
+exports.testQuiet = function(test) {
+    test.expect(3);
+
+    rpcClient.invoke("quiet", function(error, res, more) {
+        test.equal(error.name, "TimeoutExpired");
+        test.equal(res, null);
+        test.equal(more, false);
+        rpcServer.close();
+        rpcClient.close();
+        test.done();
+    });
 };
